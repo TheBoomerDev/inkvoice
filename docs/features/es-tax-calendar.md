@@ -75,8 +75,10 @@ Mounted at `/api/v1/plugins/es-tax-calendar` and gated by plugin enablement:
 | Method | Path | Notes |
 |---|---|---|
 | `GET` | `/report?year=YYYY` | The whole calendar. Defaults to the current year; years outside 2000–2100 are rejected. |
-| `GET` | `/config` | Current territory, `fiscal_form`, `company_country` and currency, plus the selectable regimes and forms. |
+| `GET` | `/config` | Current territory, `fiscal_form`, `company_country` and currency, plus the selectable regimes, forms and models. |
 | `PUT` | `/config` | `{ "regime": "comun" \| "canarias" \| "foral", "fiscal_form": "autonomo" \| "sociedad" }`, admin only. |
+| `GET` | `/briefing?model=<m>&period=<p>` | The guide, the figures and the rows for one filing. `period` is `2026-T3` for a quarter or `2026` for an annual return. |
+| `GET` | `/briefing?model=<m>&period=<p>&format=zip` | The same bundle as a ZIP: `LEEME.md`, `resumen.csv`, `facturas.csv`, `gastos.csv` and, for the 347, `clientes_347.csv`. |
 
 ## Two views of the same numbers
 
@@ -109,6 +111,32 @@ Months of the following year that hold a deadline (January for 303/130/390/349,
 February for 347, July for 200) are appended to the calendar, because the
 fourth quarter is filed there. `fiscal_form = null` keeps both the 130 and the
 200 out and shows a `choose_form` note rather than guessing.
+
+## Filing guides and the ZIP
+
+Each filing carries a beginner guide: what the model declares, **where it is
+presented** (the AEAT Sede Electrónica), who has to file it, the deadline, how
+to identify yourself (certificate, DNIe, Cl@ve), the steps in order and the
+pitfalls. The text is Spanish on purpose — it is about the Spanish agency — and
+the same guide is written into the ZIP as `LEEME.md`.
+
+Models covered: 303, 420 (Canarias), 130, 200, 390, 425, 347 and 349. A guide
+only exists for an obligation this installation actually has: the 420 needs the
+Canarias regime, the 130 needs an autónomo and the 200 a sociedad. The route
+answers 404 instead of inventing a declaration.
+
+The ZIP is what the taxpayer takes to the agency:
+
+| File | Contents |
+|---|---|
+| `LEEME.md` | The guide: where, who, when, how, and the warnings. |
+| `resumen.csv` | The amounts this installation computes for that period. |
+| `facturas.csv` | The invoices of the period that back the numbers. |
+| `gastos.csv` | The expenses of the period, with their invoice links. |
+| `clientes_347.csv` | Only for the 347: counterparties and their annual total. |
+
+Quarterly briefings show the quarter's own figures; the annual returns show
+the whole exercise. Amounts are formatted Spanish style (`2.000,00 EUR`).
 
 ## Expense invoice links
 
