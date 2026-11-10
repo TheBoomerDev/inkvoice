@@ -41,10 +41,15 @@ export default function FiscalYearCalendar({
 }) {
   const { t, language } = useTranslation();
 
-  // Deadlines of the year itself, then the following January: the fourth
-  // quarter and the annual returns are filed there.
-  const months = Array.from({ length: 12 }, (_, i) => report.year * 100 + i);
-  months.push((report.year + 1) * 100); // January of the next year
+  // The twelve months of the year, plus any month of the next year that holds
+  // a deadline: the fourth quarter and the annual returns are filed there
+  // (January for 303/130/390/349, February for 347, July for the 200).
+  const monthKeys = new Set<number>(Array.from({ length: 12 }, (_, i) => report.year * 100 + i));
+  for (const f of report.filings) {
+    const y = Number(f.date.slice(0, 4));
+    if (y === report.year + 1) monthKeys.add(y * 100 + Number(f.date.slice(5, 7)) - 1);
+  }
+  const months = [...monthKeys].sort((a, b) => a - b);
 
   return (
     <div className="space-y-4">
@@ -67,17 +72,17 @@ export default function FiscalYearCalendar({
             const y = Number(f.date.slice(0, 4));
             return y === year && m === month + 1;
           });
-          const isNextJanuary = key === (report.year + 1) * 100;
+          const isNextYear = year === report.year + 1;
 
           return (
             <div
               key={key}
-              className={cn("rounded-lg border p-3", isNextJanuary && "border-dashed bg-muted/30")}
+              className={cn("rounded-lg border p-3", isNextYear && "border-dashed bg-muted/30")}
             >
               <p className="mb-2 flex items-center gap-2 text-sm font-medium capitalize">
                 <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
                 {monthName(year, month, language)}
-                {isNextJanuary && (
+                {isNextYear && (
                   <span className="text-xs font-normal text-muted-foreground">
                     {t("es_tax.next_year_january", { year })}
                   </span>
