@@ -222,13 +222,24 @@ describe("es-tax-calendar: deadlines and territories", () => {
     expect(q1.state).toBe("overdue");
     expect(q1.days_left).toBe(-25);
     expect(q2.state).toBe("open");
-    expect(q3.state).toBe("open");
+    // Q3 only holds a draft, which is not an accrued operation.
+    expect(q3.state).toBe("no_activity");
 
     // The day the return is due is still on time, not late.
     const onDeadline = buildReport(YEAR, new Date("2026-04-20T08:00:00Z")).quarters[0];
     expect(onDeadline.state).toBe("due");
     expect(onDeadline.days_left).toBe(0);
     expect(onDeadline.days_left).not.toBeLessThan(0);
+  });
+
+  test("a period with no recorded activity is not reported as overdue", () => {
+    // 2025 has no invoices or expenses in the fixtures, and every deadline is
+    // long past: the period is empty, not a missed filing.
+    const empty = buildReport(2025, TODAY);
+    expect(empty.quarters.every((q) => q.state === "no_activity")).toBe(true);
+    expect(empty.quarters.every((q) => q.invoices === 0 && q.expenses === 0)).toBe(true);
+    // A period with data still reports the passed deadline.
+    expect(buildReport(YEAR, TODAY).quarters[0].state).toBe("overdue");
   });
 
   test("annual deadlines fall in the following January/February", () => {

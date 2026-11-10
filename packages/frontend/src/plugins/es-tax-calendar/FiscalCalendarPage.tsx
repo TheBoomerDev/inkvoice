@@ -38,6 +38,7 @@ const STATE_VARIANT: Record<
   due: "default",
   overdue: "destructive",
   closed: "secondary",
+  no_activity: "outline",
 };
 
 function formatDate(iso: string, locale: string): string {
@@ -305,7 +306,9 @@ export default function FiscalCalendarPage() {
 
                   <div className="flex items-center gap-2 rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
                     <CalendarClock className="h-3.5 w-3.5 shrink-0" />
-                    {q.deadline ? (
+                    {q.state === "no_activity" ? (
+                      <span>{t("es_tax.no_activity")}</span>
+                    ) : q.deadline ? (
                       <span>
                         {t("es_tax.deadline")}: {formatDate(q.deadline, language)} ·{" "}
                         {q.days_left !== null && q.days_left >= 0

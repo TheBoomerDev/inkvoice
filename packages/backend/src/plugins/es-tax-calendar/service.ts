@@ -137,8 +137,12 @@ export interface QuarterRow {
   deadline: string | null;
   /** Days until the deadline; negative once it has passed; null with no deadline. */
   days_left: number | null;
-  /** open = period not over · due = period over, deadline ahead · overdue · closed */
-  state: "open" | "due" | "overdue" | "closed";
+  /**
+   * open = period not over · due = period over, deadline ahead · overdue ·
+   * closed · no_activity = period with no recorded invoices or expenses (there
+   * is nothing to declare, so a passed deadline is not a missed filing).
+   */
+  state: "open" | "due" | "overdue" | "closed" | "no_activity";
   /** Base imponible of issued invoices (net of credit notes). */
   sales_taxable: number;
   /** IVA repercutido. */
@@ -345,7 +349,8 @@ export function buildReport(year: number, today: Date = new Date()): EsTaxReport
 
     const daysLeft = bounds.deadline ? daysBetween(todayStr, bounds.deadline) : null;
     let state: QuarterRow["state"];
-    if (todayStr <= bounds.to) state = "open";
+    if (invoicesCount === 0 && expensesCount === 0) state = "no_activity";
+    else if (todayStr <= bounds.to) state = "open";
     else if (daysLeft === null) state = "due";
     else if (daysLeft < 0) state = "overdue";
     else state = "due";

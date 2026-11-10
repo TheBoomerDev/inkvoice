@@ -20,7 +20,7 @@ export interface TaxRateRow {
   tax: number;
 }
 
-export type QuarterState = "open" | "due" | "overdue" | "closed";
+export type QuarterState = "open" | "due" | "overdue" | "closed" | "no_activity";
 
 export interface QuarterRow {
   quarter: number;
