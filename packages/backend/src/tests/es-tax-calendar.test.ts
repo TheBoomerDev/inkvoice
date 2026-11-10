@@ -438,6 +438,20 @@ describe("es-tax-calendar: filing briefings", () => {
     expect(briefing!.expenses[0].vendor).toBe("Proveedor");
   });
 
+  test("a quarterly briefing shows the quarter's own figures, not the year's", () => {
+    const q1 = buildBriefing("303", "2026-T1")!;
+    const year = buildBriefing("390", "2026")!;
+    const value = (briefing: typeof q1, label: string) =>
+      briefing.lines.find((l) => l.label === label)?.value ?? "";
+    // Q1 fixtures: 900 taxable, 189 VAT out, 105 VAT in, 84 result.
+    expect(value(q1, "Base imponible facturada")).toContain("900");
+    expect(value(q1, "IVA repercutido")).toContain("189");
+    expect(value(q1, "Resultado")).toContain("84");
+    // The annual return covers the whole exercise: 4900 taxable, 1029 VAT.
+    expect(value(year, "Base imponible facturada")).toContain("4.900");
+    expect(value(year, "IVA repercutido")).toContain("1.029");
+  });
+
   test("annual models are briefed with the whole year, quarterly ones are not", () => {
     expect(buildBriefing("390", "2026")).not.toBeNull();
     expect(buildBriefing("347", "2026")).not.toBeNull();

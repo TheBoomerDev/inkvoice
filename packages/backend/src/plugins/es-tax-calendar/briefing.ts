@@ -307,6 +307,18 @@ interface ExpenseRow {
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 
 /**
+ * Spanish amount format: thousands with a dot, decimals with a comma. Done by
+ * hand because the runtime's `toLocaleString("es-ES")` drops the thousands
+ * separator, and the guide is read by humans comparing it with the AEAT form.
+ */
+export function formatEsAmount(value: number): string {
+  const fixed = Math.abs(value).toFixed(2);
+  const [whole, decimals] = fixed.split(".");
+  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  return `${value < 0 ? "-" : ""}${grouped},${decimals}`;
+}
+
+/**
  * Builds the briefing for one model and period. Returns null when the model has
  * no guide or the installation has no such obligation (e.g. the 420 outside
  * Canarias), so the route can answer 404 instead of inventing a document.
@@ -355,8 +367,7 @@ export function buildBriefing(model: string, periodValue: string): Briefing | nu
     .all(period.from, period.to) as ExpenseRow[];
 
   const currency = report.currency;
-  const money = (value: number) =>
-    `${value.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
+  const money = (value: number) => `${formatEsAmount(value)} ${currency}`;
 
   const lines: { label: string; value: string }[] = [
     { label: "Modelo", value: guide.title },
@@ -364,16 +375,33 @@ export function buildBriefing(model: string, periodValue: string): Briefing | nu
     { label: "Fecha de presentación", value: filing.date },
     { label: "Estado", value: filing.state },
   ];
+  // A quarterly return shows the quarter's own figures; the annual summary
+  // (390/425) shows the whole year.
+  const periodQuarter = period.quarter
+    ? report.quarters.find((q) => q.quarter === period.quarter)
+    : undefined;
+  const taxable = periodQuarter?.sales_taxable ?? report.year_totals.sales_taxable;
+  const outputVat = periodQuarter?.output_vat ?? report.year_totals.output_vat;
+  const inputVat = periodQuarter?.input_vat ?? report.year_totals.input_vat;
+  const result = periodQuarter?.result ?? report.year_totals.result;
+
   if (model === "303" || model === "420" || model === "390" || model === "425") {
     lines.push(
-      { label: "Base imponible facturada", value: money(report.year_totals.sales_taxable) },
-      { label: "IVA repercutido", value: money(report.year_totals.output_vat) },
-      { label: "IVA soportado", value: money(report.year_totals.input_vat) },
-      { label: "Resultado", value: money(report.year_totals.result) },
+      { label: "Base imponible facturada", value: money(taxable) },
+      { label: "IVA repercutido", value: money(outputVat) },
+      { label: "IVA soportado", value: money(inputVat) },
+      { label: "Resultado", value: money(result) },
     );
   }
   if (model === "130") {
-    lines.push({ label: "Cuota estimada (20 % del beneficio)", value: money(filing.amount ?? 0) });
+    const profit = Math.max(
+      0,
+      (periodQuarter?.sales_taxable ?? 0) - (periodQuarter?.purchases_taxable ?? 0),
+    );
+    lines.push(
+      { label: "Beneficio estimado del periodo", value: money(profit) },
+      { label: "Cuota estimada (20 % del beneficio)", value: money(filing.amount ?? 0) },
+    );
   }
   if (model === "347") {
     lines.push({
