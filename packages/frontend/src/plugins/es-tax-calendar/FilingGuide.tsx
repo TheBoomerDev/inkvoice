@@ -167,7 +167,11 @@ export default function FilingGuide({
                   {briefing.lines.map((line) => (
                     <div key={line.label} className="contents">
                       <dt className="text-muted-foreground">{line.label}</dt>
-                      <dd className="text-right font-medium tabular-nums">{line.value}</dd>
+                      <dd className="text-right font-medium tabular-nums">
+                        {line.label === "Estado"
+                          ? t(`es_tax.state_${briefing.filing.state}`)
+                          : line.value}
+                      </dd>
                     </div>
                   ))}
                 </dl>
@@ -195,8 +199,8 @@ export default function FilingGuide({
                     model: briefing.model,
                     period:
                       briefing.period.quarter === null
-                        ? String(briefing.period.year)
-                        : `T${briefing.period.quarter}`,
+                        ? `${briefing.period.year}-anual`
+                        : `${briefing.period.year}-T${briefing.period.quarter}`,
                   })}
                 </span>
               </div>

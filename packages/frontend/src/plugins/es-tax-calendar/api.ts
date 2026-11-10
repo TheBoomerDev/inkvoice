@@ -173,7 +173,9 @@ export async function downloadBriefingZip(model: string, period: string): Promis
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `modelo-${model}-${period}.zip`;
+  // Same file name the server sends in Content-Disposition.
+  const label = /^\d{4}$/.test(period) ? `${period}-anual` : period;
+  link.download = `modelo-${model}-${label}.zip`;
   document.body.appendChild(link);
   link.click();
   link.remove();
