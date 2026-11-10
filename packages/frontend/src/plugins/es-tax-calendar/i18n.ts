@@ -46,6 +46,8 @@ registerTranslations("en", {
     note_annual: "annual summary",
     note_no_activity: "nothing to declare",
     note_is_not_computed: "not calculated by this plugin",
+    note_choose_form:
+      "Choose the legal form (autónomo or sociedad) to file the right profit tax: modelo 130 quarterly or modelo 200 once a year.",
     is_return: "Modelo {{model}}",
     is_return_desc:
       "Corporation tax: one filing, within 25 days after six months from the year end.",
@@ -140,6 +142,8 @@ registerTranslations("es", {
     note_annual: "resumen anual",
     note_no_activity: "nada que declarar",
     note_is_not_computed: "no calculado por este plugin",
+    note_choose_form:
+      "Elige la forma jurídica (autónomo o sociedad) para saber qué impuesto sobre el beneficio presenta: el 130 trimestral o el 200 una vez al año.",
     is_return: "Modelo {{model}}",
     is_return_desc:
       "Impuesto de Sociedades: una presentación, en los 25 días siguientes a los seis meses del cierre del ejercicio.",
@@ -235,6 +239,8 @@ registerTranslations("de", {
     note_annual: "Jahresübersicht",
     note_no_activity: "nichts zu melden",
     note_is_not_computed: "von diesem Plugin nicht berechnet",
+    note_choose_form:
+      "Wählen Sie die Rechtsform (Selbstständig oder Gesellschaft), um die richtige Gewinnsteuer zu melden: Modell 130 vierteljährlich oder Modell 200 einmal jährlich.",
     is_return: "Modell {{model}}",
     is_return_desc:
       "Körperschaftsteuer: eine Abgabe, innerhalb von 25 Tagen nach sechs Monaten zum Jahresende.",
@@ -329,6 +335,8 @@ registerTranslations("fr", {
     note_annual: "résumé annuel",
     note_no_activity: "rien à déclarer",
     note_is_not_computed: "non calculé par ce plugin",
+    note_choose_form:
+      "Choisissez la forme juridique (indépendant ou société) pour déclarer le bon impôt sur le bénéfice : modèle 130 trimestriel ou modèle 200 annuel.",
     is_return: "Modèle {{model}}",
     is_return_desc:
       "Impôt sur les sociétés : un dépôt, dans les 25 jours suivant les six mois de la clôture.",
@@ -424,6 +432,8 @@ registerTranslations("tr", {
     note_annual: "yıllık özet",
     note_no_activity: "beyan edilecek bir şey yok",
     note_is_not_computed: "bu eklenti tarafından hesaplanmaz",
+    note_choose_form:
+      "Doğru kâr vergisini beyan etmek için hukuki formu seçin (serbest çalışan veya şirket): üç aylık 130 nolu form veya yıllık 200 nolu form.",
     is_return: "{{model}} nolu form",
     is_return_desc:
       "Kurumlar vergisi: tek beyan, mali yıl kapanmasından sonraki altı ayı takip eden 25 gün içinde.",

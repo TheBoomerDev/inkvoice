@@ -352,7 +352,7 @@ export default function Expenses() {
                 {isColVisible("expense_date") && (
                   <TableCell className="text-muted-foreground tabular-nums">
                     {formatDate(e.expense_date)}
-                    <span className="ml-1 text-xs text-muted-foreground/70">
+                    <span className="ml-1.5 rounded bg-muted px-1 text-[11px] text-muted-foreground">
                       T{Math.floor(new Date(`${e.expense_date}T00:00:00Z`).getUTCMonth() / 3) + 1}
                     </span>
                   </TableCell>
