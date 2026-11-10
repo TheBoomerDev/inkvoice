@@ -75,8 +75,51 @@ Mounted at `/api/v1/plugins/es-tax-calendar` and gated by plugin enablement:
 | Method | Path | Notes |
 |---|---|---|
 | `GET` | `/report?year=YYYY` | The whole calendar. Defaults to the current year; years outside 2000–2100 are rejected. |
-| `GET` | `/config` | Current territory, `company_country` and currency. |
-| `PUT` | `/config` | `{ "regime": "comun" \| "canarias" \| "foral" }`, admin only. |
+| `GET` | `/config` | Current territory, `fiscal_form`, `company_country` and currency, plus the selectable regimes and forms. |
+| `PUT` | `/config` | `{ "regime": "comun" \| "canarias" \| "foral", "fiscal_form": "autonomo" \| "sociedad" }`, admin only. |
+
+## Two views of the same numbers
+
+The plugin renders a monthly calendar next to the quarterly summary. The
+calendar is the answer to "when do I file this?", which the quarter table does
+not show on its own: every deadline has its own date, and several of them fall
+in the following year.
+
+`report.filings` is the single source of truth for it — a flat, date-ordered
+list of every obligation the installation can derive for the year:
+
+| Field | Meaning |
+|---|---|
+| `date` | Filing deadline (always the 20th/28th/30th/31st of the month, per model). |
+| `model` | 303, 420, 130, 200, 390, 425, 347, 349. |
+| `kind` | `iva`, `irpf`, `is`, `info`, `intracom`. |
+| `period_from` / `period_to` | The quarter or the year the filing covers. |
+| `state` | `open`, `overdue`, `closed`, `no_activity`, `pending`. |
+| `amount` | Computed amount, or `0` when nothing exceeds the threshold. |
+| `note` | Machine key for the explanation (`choose_form`, `note_annual`, …). |
+
+Which filings exist depends on the settings:
+
+- **Régimen común**: 303 (quarterly), 390 (annual), 347, 349.
+- **Canarias**: 420 (quarterly), 425 (annual), 347, 349.
+- **Autónomo**: 130 (quarterly IRPF advance) on top.
+- **Sociedad**: 200 (annual corporation tax) instead of 130.
+
+Months of the following year that hold a deadline (January for 303/130/390/349,
+February for 347, July for 200) are appended to the calendar, because the
+fourth quarter is filed there. `fiscal_form = null` keeps both the 130 and the
+200 out and shows a `choose_form` note rather than guessing.
+
+## Expense invoice links
+
+Gastos can carry a URL to the invoice instead of (or besides) a local copy:
+`expenses.attachment_url` (migration 36). It is a plain `TEXT` column, accepted
+on create/update, in the CSV import (aliases `attachment_url`, `link`, `url`,
+`drive`, `gdrive`, `receipt_url`, `invoice_url`) and in the CSV export, shown in
+the expenses table as a link to the original file. Only `http(s)://` values are
+accepted. The link lets an accountant or a reviewer open the Drive/Dropbox copy
+of the invoice when reviewing a period, without uploading anything to the
+server.
 
 Scoped API tokens cannot reach plugin paths; unscoped tokens act as their
 owner.
