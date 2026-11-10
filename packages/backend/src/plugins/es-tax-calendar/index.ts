@@ -9,6 +9,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { registerBackendPlugin } from "../registry";
+import { buildBriefing, buildBriefingZip, GUIDES } from "./briefing";
 import {
   buildReport,
   FORMS,
@@ -38,7 +39,9 @@ function parseYear(raw: string | undefined, today = new Date()): number | null {
   return year;
 }
 
-routes.get("/config", (c) => c.json(ok({ ...getConfig(), regimes: REGIMES, forms: FORMS })));
+routes.get("/config", (c) =>
+  c.json(ok({ ...getConfig(), regimes: REGIMES, forms: FORMS, models: Object.keys(GUIDES) })),
+);
 
 const configSchema = z
   .object({
@@ -70,6 +73,45 @@ routes.get("/report", (c) => {
   const year = parseYear(c.req.query("year"));
   if (year === null) return c.json({ success: false, error: "Invalid year" }, 400);
   return c.json(ok(buildReport(year)));
+});
+
+// Beginner briefing for one filing: the figures plus a guide to where and how
+// the declaration is presented. `format=zip` downloads the bundle.
+const briefingSchema = z.object({
+  model: z.string().min(1).max(8),
+  period: z.string().min(4).max(12),
+});
+
+routes.get("/briefing", (c) => {
+  const parsed = briefingSchema.safeParse({
+    model: c.req.query("model"),
+    period: c.req.query("period"),
+  });
+  if (!parsed.success) return c.json({ success: false, error: "Invalid briefing request" }, 400);
+
+  const briefing = buildBriefing(parsed.data.model, parsed.data.period);
+  if (!briefing) {
+    return c.json(
+      {
+        success: false,
+        error: `No ${parsed.data.model} briefing for period ${parsed.data.period}`,
+      },
+      404,
+    );
+  }
+
+  if (c.req.query("format") === "zip") {
+    const zip = buildBriefingZip(briefing);
+    const label = briefing.period.quarter ? `T${briefing.period.quarter}` : "anual";
+    return new Response(zip.buffer as ArrayBuffer, {
+      headers: {
+        "Content-Type": "application/zip",
+        "Content-Disposition": `attachment; filename="modelo-${briefing.model}-${briefing.period.year}-${label}.zip"`,
+      },
+    });
+  }
+
+  return c.json(ok(briefing));
 });
 
 registerBackendPlugin({

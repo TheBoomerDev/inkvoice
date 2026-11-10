@@ -10,6 +10,7 @@ import { closeDatabase, getDb, initDatabase } from "../database/connection";
 import { runMigrations } from "../database/migrations";
 import { seed } from "../database/seed";
 import "../plugins"; // registers es-tax-calendar
+import { buildBriefing, buildBriefingZip } from "../plugins/es-tax-calendar/briefing";
 import {
   buildReport,
   getConfig,
@@ -414,5 +415,85 @@ describe("es-tax-calendar: HTTP surface", () => {
     expect(entry.enabled).toBe(true);
     expect(entry.blockedReason).toBeNull();
     expect(entry.name).toBe("Spanish Fiscal Calendar");
+  });
+});
+
+describe("es-tax-calendar: filing briefings", () => {
+  test("a quarter's briefing carries the guide, the figures and the rows", () => {
+    const briefing = buildBriefing("303", "2026-T1");
+    expect(briefing).not.toBeNull();
+    expect(briefing!.title).toContain("303");
+    expect(briefing!.period).toEqual({
+      year: 2026,
+      quarter: 1,
+      from: "2026-01-01",
+      to: "2026-03-31",
+    });
+    expect(briefing!.filing.model).toBe("303");
+    expect(briefing!.filing.date).toBe("2026-04-20");
+    expect(briefing!.lines.some((l) => l.label === "Resultado")).toBe(true);
+    // Q1 fixtures: one invoice, one credit note, one expense.
+    expect(briefing!.invoices).toHaveLength(2);
+    expect(briefing!.expenses).toHaveLength(1);
+    expect(briefing!.expenses[0].vendor).toBe("Proveedor");
+  });
+
+  test("annual models are briefed with the whole year, quarterly ones are not", () => {
+    expect(buildBriefing("390", "2026")).not.toBeNull();
+    expect(buildBriefing("347", "2026")).not.toBeNull();
+    expect(buildBriefing("347", "2026-T1")).toBeNull();
+    expect(buildBriefing("303", "2026")).toBeNull();
+    expect(buildBriefing("130", "2026-T1")?.lines[0].value).toContain("130");
+    expect(buildBriefing("130", "2026")).toBeNull();
+  });
+
+  test("the guide follows the territory: no 420 outside Canarias", () => {
+    expect(buildBriefing("420", "2026-T1")).toBeNull();
+    setRegime("canarias");
+    try {
+      expect(buildBriefing("420", "2026-T1")).not.toBeNull();
+    } finally {
+      setRegime("comun");
+    }
+  });
+
+  test("the ZIP is a real archive with the guide and the CSVs", () => {
+    const briefing = buildBriefing("303", "2026-T1")!;
+    const zip = buildBriefingZip(briefing);
+    const text = Buffer.from(zip).toString("latin1");
+    expect(text.slice(0, 4)).toBe("PK\x03\x04");
+    for (const name of ["LEEME.md", "resumen.csv", "facturas.csv", "gastos.csv"]) {
+      expect(text).toContain(name);
+    }
+    // End of central directory record.
+    expect(text.slice(-22, -18)).toBe("PK\x05\x06");
+  });
+
+  test("the 347 ZIP lists the counterparties above the threshold", () => {
+    const zip = buildBriefingZip(buildBriefing("347", "2026")!);
+    expect(Buffer.from(zip).toString("latin1")).toContain("clientes_347.csv");
+  });
+
+  test("HTTP: briefing JSON, ZIP download and 404s", async () => {
+    const res = await authed("/api/v1/plugins/es-tax-calendar/briefing?model=303&period=2026-T1");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as any;
+    expect(body.success).toBe(true);
+    expect(body.data.model).toBe("303");
+
+    const zip = await authed(
+      "/api/v1/plugins/es-tax-calendar/briefing?model=303&period=2026-T1&format=zip",
+    );
+    expect(zip.status).toBe(200);
+    expect(zip.headers.get("content-type")).toContain("application/zip");
+    expect(zip.headers.get("content-disposition")).toContain('filename="modelo-303-2026-T1.zip"');
+    const bytes = new Uint8Array(await zip.arrayBuffer());
+    expect(Buffer.from(bytes).toString("latin1").slice(0, 4)).toBe("PK\x03\x04");
+
+    const missing = await authed("/api/v1/plugins/es-tax-calendar/briefing?model=999&period=2026");
+    expect(missing.status).toBe(404);
+
+    const bad = await authed("/api/v1/plugins/es-tax-calendar/briefing?model=303");
+    expect(bad.status).toBe(400);
   });
 });

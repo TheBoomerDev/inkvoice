@@ -1,6 +1,7 @@
 // Typed client for the Spanish fiscal calendar plugin
 // (/api/v1/plugins/es-tax-calendar).
 
+import { getAuthToken } from "@/api/client";
 import { pluginFetch } from "../api";
 
 const BASE = "/plugins/es-tax-calendar";
@@ -15,6 +16,8 @@ export interface EsTaxConfig {
   currency: string;
   regimes: EsTaxRegime[];
   forms: EsTaxForm[];
+  /** Models the plugin can build a briefing (and a ZIP) for. */
+  models: string[];
 }
 
 export interface TaxRateRow {
@@ -62,6 +65,32 @@ export interface Customer347Row {
   tax_id: string | null;
   total: number;
   over_threshold: boolean;
+}
+
+export interface BriefingLine {
+  label: string;
+  value: string;
+}
+
+export interface Briefing {
+  model: string;
+  title: string;
+  period: { year: number; quarter: number | null; from: string; to: string };
+  filing: FilingRow;
+  guide: {
+    summary: string;
+    agency: string;
+    url: string;
+    auth: string[];
+    who: string;
+    deadline: string;
+    steps: string[];
+    caveats: string[];
+  };
+  lines: BriefingLine[];
+  invoices: unknown[];
+  expenses: unknown[];
+  customers_347: Customer347Row[];
 }
 
 export interface EsTaxReport {
@@ -113,4 +142,40 @@ export const esTaxApi = {
     }).then((r) => r.data),
   report: (year: number) =>
     pluginFetch<{ data: EsTaxReport }>(`${BASE}/report?year=${year}`).then((r) => r.data),
+  briefing: (model: string, period: string) =>
+    pluginFetch<{ data: Briefing }>(`${BASE}/briefing?model=${model}&period=${period}`).then(
+      (r) => r.data,
+    ),
 };
+
+/**
+ * Downloads the filing ZIP. Plugin calls go through the JSON helper, which
+ * cannot stream a binary, so this repeats the auth handling (in-memory token
+ * plus the session cookie) and hands the blob to the browser.
+ */
+export async function downloadBriefingZip(model: string, period: string): Promise<void> {
+  const headers: Record<string, string> = {};
+  const token = getAuthToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const res = await fetch(
+    `/api/v1${BASE}/briefing?model=${encodeURIComponent(model)}&period=${encodeURIComponent(
+      period,
+    )}&format=zip`,
+    { headers, credentials: "include" },
+  );
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(body.error || `Request failed (${res.status})`);
+  }
+
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `modelo-${model}-${period}.zip`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}

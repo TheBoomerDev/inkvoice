@@ -35,6 +35,7 @@ import {
   esTaxApi,
   type QuarterRow,
 } from "./api";
+import FilingGuide from "./FilingGuide";
 import FiscalYearCalendar from "./FiscalYearCalendar";
 
 const STATE_VARIANT: Record<
@@ -384,6 +385,27 @@ export default function FiscalCalendarPage() {
                         </dd>
                       </dl>
 
+                      <div className="flex flex-wrap items-center gap-2">
+                        {q.model && (
+                          <FilingGuide
+                            model={q.model}
+                            period={`${report.year}-T${q.quarter}`}
+                            withDownload
+                          >
+                            {t("es_tax.guide_button")} · {q.model}
+                          </FilingGuide>
+                        )}
+                        {report.annual.irpf_model === "130" && (
+                          <FilingGuide
+                            model="130"
+                            period={`${report.year}-T${q.quarter}`}
+                            withDownload
+                          >
+                            {t("es_tax.guide_button")} · 130
+                          </FilingGuide>
+                        )}
+                      </div>
+
                       <div className="flex items-center gap-2 rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
                         <CalendarClock className="h-3.5 w-3.5 shrink-0" />
                         {q.state === "no_activity" ? (
@@ -478,6 +500,15 @@ export default function FiscalCalendarPage() {
                         {money(report.year_totals.output_vat)} −{" "}
                         {money(report.year_totals.input_vat)} = {money(report.year_totals.result)}
                       </p>
+                      {report.annual.vat_model && (
+                        <FilingGuide
+                          model={report.annual.vat_model}
+                          period={`${report.year}`}
+                          withDownload
+                        >
+                          {t("es_tax.guide_button")} · {report.annual.vat_model}
+                        </FilingGuide>
+                      )}
                     </CardContent>
                   </Card>
                   <Card>
@@ -504,6 +535,15 @@ export default function FiscalCalendarPage() {
                         {report.annual.customers_347.filter((c) => c.over_threshold).length} /{" "}
                         {report.annual.customers_347.length}
                       </p>
+                      {report.annual.info_model && (
+                        <FilingGuide
+                          model={report.annual.info_model}
+                          period={`${report.year}`}
+                          withDownload
+                        >
+                          {t("es_tax.guide_button")} · {report.annual.info_model}
+                        </FilingGuide>
+                      )}
                     </CardContent>
                   </Card>
                   <Card>
@@ -521,6 +561,15 @@ export default function FiscalCalendarPage() {
                           {t("es_tax.deadline")}:{" "}
                           {formatDate(report.annual.intracom_deadline, language)}
                         </p>
+                      )}
+                      {report.annual.intracom_model && (
+                        <FilingGuide
+                          model={report.annual.intracom_model}
+                          period={`${report.year}`}
+                          withDownload
+                        >
+                          {t("es_tax.guide_button")} · {report.annual.intracom_model}
+                        </FilingGuide>
                       )}
                     </CardContent>
                   </Card>
@@ -542,6 +591,15 @@ export default function FiscalCalendarPage() {
                         <p className="text-sm font-medium text-foreground tabular-nums">
                           {t("es_tax.irpf_estimate")}: {money(report.annual.irpf_estimate)}
                         </p>
+                        {report.annual.irpf_model && (
+                          <FilingGuide
+                            model={report.annual.irpf_model}
+                            period={`${report.year}-T4`}
+                            withDownload
+                          >
+                            {t("es_tax.guide_button")} · {report.annual.irpf_model}
+                          </FilingGuide>
+                        )}
                       </CardContent>
                     </Card>
                   )}
@@ -559,6 +617,15 @@ export default function FiscalCalendarPage() {
                             {t("es_tax.deadline")}:{" "}
                             {formatDate(report.annual.is_deadline, language)}
                           </p>
+                        )}
+                        {report.annual.is_model && (
+                          <FilingGuide
+                            model={report.annual.is_model}
+                            period={`${report.year}`}
+                            withDownload
+                          >
+                            {t("es_tax.guide_button")} · {report.annual.is_model}
+                          </FilingGuide>
                         )}
                       </CardContent>
                     </Card>

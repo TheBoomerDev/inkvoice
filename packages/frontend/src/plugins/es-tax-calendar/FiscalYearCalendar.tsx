@@ -8,6 +8,7 @@ import { CalendarDays } from "lucide-react";
 import { useTranslation } from "@/i18n";
 import { cn } from "@/lib/utils";
 import type { EsTaxReport, FilingRow } from "./api";
+import FilingGuide from "./FilingGuide";
 
 const KIND_COLOR: Record<FilingRow["kind"], string> = {
   iva: "bg-blue-500",
@@ -24,6 +25,15 @@ const STATE_TEXT: Record<FilingRow["state"], string> = {
   no_activity: "text-muted-foreground",
   closed: "text-muted-foreground",
 };
+
+/** `2026-T3` for a quarter, `2026` for an annual return. */
+function filingPeriod(filing: FilingRow, reportYear: number): string {
+  if (!filing.period_from || !filing.period_to) return `${reportYear}`;
+  const quarterStart = filing.period_from.endsWith("-01-01") && filing.period_to.endsWith("-12-31");
+  if (quarterStart) return `${reportYear}`;
+  const month = Number(filing.period_from.slice(5, 7));
+  return `${reportYear}-T${Math.floor((month - 1) / 3) + 1}`;
+}
 
 function monthName(year: number, month: number, locale: string): string {
   return new Date(Date.UTC(year, month, 1)).toLocaleDateString(locale, {
@@ -119,6 +129,11 @@ export default function FiscalYearCalendar({
                           {f.amount !== null && (
                             <span className="font-semibold tabular-nums">{money(f.amount)}</span>
                           )}
+                          <FilingGuide
+                            model={f.model}
+                            period={filingPeriod(f, report.year)}
+                            compact
+                          />
                         </span>
                         <span className={cn("block", STATE_TEXT[f.state])}>
                           {t(`es_tax.state_${f.state}`)}
