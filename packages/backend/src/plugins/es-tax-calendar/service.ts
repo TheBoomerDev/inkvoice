@@ -21,7 +21,22 @@ export function isRegime(value: unknown): value is EsTaxRegime {
   return typeof value === "string" && (REGIMES as readonly string[]).includes(value);
 }
 
+/**
+ * Legal form of the business, which decides the profit tax calendar: an
+ * autónomo files modelo 130 quarterly, a sociedad files modelo 200 once a year.
+ * `null` = not chosen yet, reported as 130 (the pre-existing behaviour) with a
+ * note asking for the choice rather than silently assuming one.
+ */
+export type EsTaxForm = "autonomo" | "sociedad";
+
+export const FORMS: readonly EsTaxForm[] = ["autonomo", "sociedad"] as const;
+
+export function isForm(value: unknown): value is EsTaxForm {
+  return typeof value === "string" && (FORMS as readonly string[]).includes(value);
+}
+
 const SETTING_REGIME = "es_tax_regime";
+const SETTING_FORM = "es_tax_form";
 
 // Invoice states that represent a real, issued operation. Drafts are excluded
 // (nothing has accrued yet) and voided rows are excluded (they never existed
@@ -69,6 +84,15 @@ function daysBetween(from: string, to: string): number {
   return Math.round((b - a) / 86_400_000);
 }
 
+/**
+ * Modelo 130 instalment deadline for a quarter: the 20th of the month after the
+ * quarter ends, so the fourth quarter falls on 20 January of the next year —
+ * the same dates as the 303/420 VAT self-assessment.
+ */
+export function quarterIrpfDeadline(year: number, quarter: number): string {
+  return quarter === 4 ? isoDate(year + 1, 1, 20) : isoDate(year, quarter * 3 + 1, 20);
+}
+
 export interface QuarterBounds {
   from: string;
   to: string;
@@ -100,6 +124,7 @@ export function quarterBounds(year: number, quarter: number, regime: EsTaxRegime
 
 export interface EsTaxConfig {
   regime: EsTaxRegime;
+  fiscal_form: EsTaxForm | null;
   /** company_country setting, so the UI can explain why it is (not) relevant. */
   company_country: string | null;
   currency: string;
@@ -108,8 +133,10 @@ export interface EsTaxConfig {
 export function getConfig(): EsTaxConfig {
   const stored = getSetting(SETTING_REGIME);
   const country = getSetting("company_country");
+  const storedForm = getSetting(SETTING_FORM);
   return {
     regime: isRegime(stored) ? stored : "comun",
+    fiscal_form: isForm(storedForm) ? storedForm : null,
     company_country: country || null,
     currency: getSetting("currency") || getSetting("base_currency") || "EUR",
   };
@@ -117,6 +144,11 @@ export function getConfig(): EsTaxConfig {
 
 export function setRegime(regime: EsTaxRegime): EsTaxConfig {
   updateSettings({ [SETTING_REGIME]: regime });
+  return getConfig();
+}
+
+export function setFiscalForm(form: EsTaxForm): EsTaxConfig {
+  updateSettings({ [SETTING_FORM]: form });
   return getConfig();
 }
 
@@ -161,6 +193,27 @@ export interface QuarterRow {
   draft_invoices: number;
 }
 
+/**
+ * One dated obligation in the year: the deadline, the model, the period it
+ * covers and the amount this install's own books produce for it. This is what
+ * the calendar view renders, so the UI never has to re-derive dates.
+ */
+export interface FilingRow {
+  /** ISO deadline. */
+  date: string;
+  /** 303 | 420 | 130 | 200 | 390 | 425 | 347 | 349 */
+  model: string;
+  kind: "iva" | "irpf" | "is" | "info" | "intracom";
+  /** Period the return covers, when it covers one. */
+  period_from: string | null;
+  period_to: string | null;
+  state: "open" | "due" | "overdue" | "no_activity" | "closed";
+  /** Amount to enter, when it is computed from the books; null = informational. */
+  amount: number | null;
+  /** Extra i18n note key, e.g. "estimate". */
+  note: string | null;
+}
+
 export interface Customer347Row {
   customer_id: string;
   name: string;
@@ -177,6 +230,8 @@ export interface EsTaxReport {
   company_country: string | null;
   notes: string[];
   quarters: QuarterRow[];
+  /** Every dated obligation of the year, sorted by deadline. */
+  filings: FilingRow[];
   year_totals: {
     sales_taxable: number;
     output_vat: number;
@@ -197,6 +252,9 @@ export interface EsTaxReport {
     irpf_model: string | null;
     irpf_deadline: string | null;
     irpf_estimate: number;
+    /** Sociedad: modelo 200, once a year. null for an autónomo. */
+    is_model: string | null;
+    is_deadline: string | null;
   };
 }
 
@@ -428,6 +486,97 @@ export function buildReport(year: number, today: Date = new Date()): EsTaxReport
   if (!config.company_country) {
     notes.push("no_company_country");
   }
+  if (!config.fiscal_form) {
+    notes.push("choose_form");
+  }
+
+  // --- Dated obligations of the year ---------------------------------------
+  // `null` fiscal_form behaves as "autonomo" (modelo 130) so an install that
+  // never chose keeps the figures it had; the note above asks for the choice.
+  const sociedad = config.fiscal_form === "sociedad" && regime !== "foral";
+
+  const datedState = (deadline: string): FilingRow["state"] =>
+    todayStr <= deadline ? "due" : "overdue";
+
+  const filings: FilingRow[] = [];
+  for (const q of quarters) {
+    if (!q.deadline || !q.model) continue;
+    filings.push({
+      date: q.deadline,
+      model: q.model,
+      kind: "iva",
+      period_from: q.from,
+      period_to: q.to,
+      state: q.state,
+      amount: q.result,
+      note: q.state === "no_activity" ? "no_activity" : null,
+    });
+    if (!sociedad) {
+      // Modelo 130 is quarterly too, on the same 20th-of-next-month dates.
+      filings.push({
+        date: quarterIrpfDeadline(year, q.quarter),
+        model: "130",
+        kind: "irpf",
+        period_from: q.from,
+        period_to: q.to,
+        state: q.state,
+        amount: round2(Math.max(0, q.sales_taxable - q.purchases_taxable) * IRPF_RATE),
+        note: "estimate",
+      });
+    }
+  }
+
+  if (regime !== "foral") {
+    const annualVatModel = ANNUAL_VAT_MODEL[regime]!;
+    filings.push({
+      date: isoDate(year + 1, 1, 30),
+      model: annualVatModel,
+      kind: "iva",
+      period_from: yearFrom,
+      period_to: yearTo,
+      state: datedState(isoDate(year + 1, 1, 30)),
+      amount: round2(totals.output_vat - totals.input_vat),
+      note: "annual",
+    });
+    filings.push({
+      date: isoDate(year + 1, 2, lastDayOfMonth(year + 1, 2)),
+      model: "347",
+      kind: "info",
+      period_from: yearFrom,
+      period_to: yearTo,
+      state: datedState(isoDate(year + 1, 2, lastDayOfMonth(year + 1, 2))),
+      amount: round2(
+        reports347.filter((c) => c.over_threshold).reduce((sum, c) => sum + c.total, 0),
+      ),
+      note: null,
+    });
+    filings.push({
+      date: isoDate(year + 1, 1, 20),
+      model: "349",
+      kind: "intracom",
+      period_from: yearFrom,
+      period_to: yearTo,
+      state: datedState(isoDate(year + 1, 1, 20)),
+      amount: null,
+      note: null,
+    });
+    if (sociedad) {
+      filings.push({
+        date: isoDate(year + 1, 7, 25),
+        model: "200",
+        kind: "is",
+        period_from: yearFrom,
+        period_to: yearTo,
+        state: datedState(isoDate(year + 1, 7, 25)),
+        amount: null,
+        note: "is_not_computed",
+      });
+    }
+  }
+
+  filings.sort((a, b) =>
+    a.date < b.date ? -1 : a.date > b.date ? 1 : a.model.localeCompare(b.model),
+  );
 
   return {
     year,
@@ -437,6 +586,7 @@ export function buildReport(year: number, today: Date = new Date()): EsTaxReport
     company_country: config.company_country,
     notes,
     quarters,
+    filings,
     year_totals: {
       sales_taxable: round2(totals.sales_taxable),
       output_vat: round2(totals.output_vat),
@@ -454,12 +604,15 @@ export function buildReport(year: number, today: Date = new Date()): EsTaxReport
       customers_347: reports347,
       intracom_model: regime === "foral" ? null : "349",
       intracom_deadline: regime === "foral" ? null : isoDate(year + 1, 1, 20),
-      irpf_model: regime === "foral" ? null : "130",
-      irpf_deadline: regime === "foral" ? null : isoDate(year + 1, 1, 30),
+      // An autónomo files 130 quarterly; a sociedad files 200 once a year.
+      irpf_model: regime === "foral" || sociedad ? null : "130",
+      irpf_deadline: regime === "foral" || sociedad ? null : isoDate(year + 1, 1, 20),
       // Cumulative for the year under estimación directa: 20% of profit.
       irpf_estimate: round2(
         Math.max(0, totals.sales_taxable - totals.purchases_taxable) * IRPF_RATE,
       ),
+      is_model: sociedad ? "200" : null,
+      is_deadline: sociedad ? isoDate(year + 1, 7, 25) : null,
     },
   };
 }

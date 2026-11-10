@@ -187,8 +187,9 @@ export function createExpense(data: Partial<Expense>): Expense {
 
   db.run(
     `INSERT INTO expenses (id, vendor, category, description, expense_date, amount, tax_id,
-       tax_rate, tax_amount, total, currency, exchange_rate, receipt_reference, customer_id, is_billable, notes)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       tax_rate, tax_amount, total, currency, exchange_rate, receipt_reference, attachment_url,
+       customer_id, is_billable, notes)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       data.vendor || null,
@@ -203,6 +204,7 @@ export function createExpense(data: Partial<Expense>): Expense {
       data.currency || "USD",
       resolveExchangeRate(data.currency, data.exchange_rate),
       data.receipt_reference || null,
+      data.attachment_url || null,
       data.customer_id || null,
       data.is_billable ?? 0,
       data.notes || null,
@@ -214,9 +216,12 @@ export function createExpense(data: Partial<Expense>): Expense {
 
 export function updateExpense(id: string, data: Partial<Expense>): Expense | null {
   const db = getDb();
-  const existing = db.query("SELECT id, receipt_reference FROM expenses WHERE id = ?").get(id) as {
+  const existing = db
+    .query("SELECT id, receipt_reference, attachment_url FROM expenses WHERE id = ?")
+    .get(id) as {
     id: string;
     receipt_reference: string | null;
+    attachment_url: string | null;
   } | null;
   if (!existing) return null;
 
@@ -227,13 +232,18 @@ export function updateExpense(id: string, data: Partial<Expense>): Expense | nul
       ? existing.receipt_reference
       : data.receipt_reference || null;
 
+  // Same contract as receipt_reference: omitted keeps the stored link, an empty
+  // string clears it.
+  const attachmentUrl =
+    data.attachment_url === undefined ? existing.attachment_url : data.attachment_url || null;
+
   const amount = data.amount ?? 0;
   const { tax_id, tax_rate, tax_amount, total } = deriveTotals(amount, data.tax_id || null);
 
   db.run(
     `UPDATE expenses SET vendor = ?, category = ?, description = ?, expense_date = ?, amount = ?,
        tax_id = ?, tax_rate = ?, tax_amount = ?, total = ?, currency = ?, exchange_rate = ?, receipt_reference = ?,
-       customer_id = ?, is_billable = ?, notes = ?, updated_at = datetime('now')
+       attachment_url = ?, customer_id = ?, is_billable = ?, notes = ?, updated_at = datetime('now')
      WHERE id = ?`,
     [
       data.vendor || null,
@@ -248,6 +258,7 @@ export function updateExpense(id: string, data: Partial<Expense>): Expense | nul
       data.currency || "USD",
       resolveExchangeRate(data.currency, data.exchange_rate),
       receiptReference,
+      attachmentUrl,
       data.customer_id || null,
       data.is_billable ?? 0,
       data.notes || null,

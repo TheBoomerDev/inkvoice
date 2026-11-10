@@ -1,4 +1,13 @@
-import { Download, Pencil, Plus, Receipt, Search, Trash2, Upload } from "lucide-react";
+import {
+  Download,
+  ExternalLink,
+  Pencil,
+  Plus,
+  Receipt,
+  Search,
+  Trash2,
+  Upload,
+} from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -91,6 +100,7 @@ export default function Expenses() {
     { key: "category", label: t("expenses.category") },
     { key: "customer", label: t("expenses.customer") },
     { key: "total", label: t("expenses.amount") },
+    { key: "attachment", label: t("expenses.attachment") },
     { key: "billable", label: t("expenses.billable") },
   ];
   const { isVisible: isColVisible } = useColumnVisibility("inkvoice-cols-expenses");
@@ -288,6 +298,11 @@ export default function Expenses() {
                   className="text-right"
                 />
               )}
+              {isColVisible("attachment") && (
+                <TableCell className="font-medium text-sm text-muted-foreground">
+                  {t("expenses.attachment")}
+                </TableCell>
+              )}
               {isColVisible("billable") && (
                 <SortableColumnHeader
                   label={t("expenses.billable")}
@@ -337,6 +352,9 @@ export default function Expenses() {
                 {isColVisible("expense_date") && (
                   <TableCell className="text-muted-foreground tabular-nums">
                     {formatDate(e.expense_date)}
+                    <span className="ml-1 text-xs text-muted-foreground/70">
+                      T{Math.floor(new Date(`${e.expense_date}T00:00:00Z`).getUTCMonth() / 3) + 1}
+                    </span>
                   </TableCell>
                 )}
                 {isColVisible("vendor") && (
@@ -357,6 +375,23 @@ export default function Expenses() {
                 {isColVisible("total") && (
                   <TableCell className="text-right tabular-nums font-medium">
                     {formatCurrency(e.total, e.currency)}
+                  </TableCell>
+                )}
+                {isColVisible("attachment") && (
+                  <TableCell onClick={(ev) => ev.stopPropagation()}>
+                    {e.attachment_url ? (
+                      <a
+                        href={e.attachment_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        aria-label={t("expenses.attachment")}
+                        className="text-muted-foreground hover:text-foreground"
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                      </a>
+                    ) : (
+                      <span className="text-muted-foreground/40">—</span>
+                    )}
                   </TableCell>
                 )}
                 {isColVisible("billable") && (

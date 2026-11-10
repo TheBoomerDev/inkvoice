@@ -15,6 +15,7 @@ import {
   getConfig,
   MODEL_347_THRESHOLD,
   quarterBounds,
+  setFiscalForm,
   setRegime,
 } from "../plugins/es-tax-calendar/service";
 import { runPluginMigrations } from "../plugins/runner";
@@ -340,6 +341,66 @@ describe("es-tax-calendar: HTTP surface", () => {
     await authed("/api/v1/plugins/es-tax-calendar/config", {
       method: "PUT",
       body: JSON.stringify({ regime: "comun" }),
+    });
+  });
+
+  describe("es-tax-calendar: dated filings", () => {
+    test("every quarter produces a 303 filing, and an autónomo also a 130", () => {
+      const report = buildReport(YEAR, TODAY);
+      const vat = report.filings.filter((f) => f.model === "303").map((f) => f.date);
+      expect(vat).toEqual(["2026-04-20", "2026-07-20", "2026-10-20", "2027-01-30"]);
+
+      const irpf = report.filings.filter((f) => f.model === "130").map((f) => f.date);
+      expect(irpf).toEqual(["2026-04-20", "2026-07-20", "2026-10-20", "2027-01-20"]);
+
+      // The list is sorted by deadline, which is what the calendar renders.
+      const dates = report.filings.map((f) => f.date);
+      expect([...dates].sort()).toEqual(dates);
+      expect(report.filings.every((f) => f.amount !== null || f.note === null)).toBe(true);
+    });
+
+    test("the annual returns and the sociedad's 200 appear once", () => {
+      const report = buildReport(YEAR, TODAY);
+      const annual = report.filings.filter(
+        (f) => f.period_from === `${YEAR}-01-01` && f.period_to === `${YEAR}-12-31`,
+      );
+      expect(annual.map((f) => f.model).sort()).toEqual(["347", "349", "390"]);
+      // Only the customer above the threshold counts: 4000 + 21% VAT.
+      expect(report.filings.find((f) => f.model === "347")?.amount).toBeCloseTo(4840, 2);
+    });
+
+    test("a sociedad files 200 instead of 130", () => {
+      setFiscalForm("sociedad");
+      try {
+        const report = buildReport(YEAR, TODAY);
+        expect(report.filings.some((f) => f.model === "200")).toBe(true);
+        expect(report.filings.some((f) => f.model === "130")).toBe(false);
+        expect(report.filings.find((f) => f.model === "200")?.date).toBe("2027-07-25");
+        expect(report.annual.is_model).toBe("200");
+        expect(report.annual.irpf_model).toBeNull();
+      } finally {
+        setFiscalForm("autonomo");
+      }
+    });
+
+    test("PUT /config accepts the legal form and rejects anything else", async () => {
+      const ok = await authed("/api/v1/plugins/es-tax-calendar/config", {
+        method: "PUT",
+        body: JSON.stringify({ fiscal_form: "sociedad" }),
+      });
+      expect(ok.status).toBe(200);
+      expect(((await ok.json()) as any).data.fiscal_form).toBe("sociedad");
+
+      const bad = await authed("/api/v1/plugins/es-tax-calendar/config", {
+        method: "PUT",
+        body: JSON.stringify({ fiscal_form: "sl" }),
+      });
+      expect(bad.status).toBe(400);
+
+      await authed("/api/v1/plugins/es-tax-calendar/config", {
+        method: "PUT",
+        body: JSON.stringify({ fiscal_form: "autonomo" }),
+      });
     });
   });
 

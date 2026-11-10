@@ -9,7 +9,16 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { registerBackendPlugin } from "../registry";
-import { buildReport, getConfig, isRegime, REGIMES, setRegime } from "./service";
+import {
+  buildReport,
+  FORMS,
+  getConfig,
+  isForm,
+  isRegime,
+  REGIMES,
+  setFiscalForm,
+  setRegime,
+} from "./service";
 
 const routes = new Hono();
 
@@ -29,17 +38,32 @@ function parseYear(raw: string | undefined, today = new Date()): number | null {
   return year;
 }
 
-routes.get("/config", (c) => c.json(ok({ ...getConfig(), regimes: REGIMES })));
+routes.get("/config", (c) => c.json(ok({ ...getConfig(), regimes: REGIMES, forms: FORMS })));
 
-const configSchema = z.object({ regime: z.enum(["comun", "canarias", "foral"]) });
+const configSchema = z
+  .object({
+    regime: z.enum(["comun", "canarias", "foral"]).optional(),
+    fiscal_form: z.enum(["autonomo", "sociedad"]).optional(),
+  })
+  .refine((v) => v.regime !== undefined || v.fiscal_form !== undefined, {
+    message: "Nothing to update",
+  });
 
 routes.put("/config", async (c) => {
   if (!isAdmin(c)) return c.json({ success: false, error: "Forbidden" }, 403);
   const parsed = configSchema.safeParse(await c.req.json().catch(() => null));
-  if (!parsed.success) return c.json({ success: false, error: "Invalid regime" }, 400);
-  if (!isRegime(parsed.data.regime))
-    return c.json({ success: false, error: "Invalid regime" }, 400);
-  return c.json(ok(setRegime(parsed.data.regime)));
+  if (!parsed.success) return c.json({ success: false, error: "Invalid config" }, 400);
+  if (parsed.data.regime !== undefined) {
+    if (!isRegime(parsed.data.regime))
+      return c.json({ success: false, error: "Invalid regime" }, 400);
+    setRegime(parsed.data.regime);
+  }
+  if (parsed.data.fiscal_form !== undefined) {
+    if (!isForm(parsed.data.fiscal_form))
+      return c.json({ success: false, error: "Invalid fiscal form" }, 400);
+    setFiscalForm(parsed.data.fiscal_form);
+  }
+  return c.json(ok(getConfig()));
 });
 
 routes.get("/report", (c) => {

@@ -41,6 +41,7 @@ const expenseCsvColumns: CsvColumn<ExpenseExportRow>[] = [
   { header: "Customer", key: "customer_name" },
   { header: "Billable", key: "is_billable", formatter: (v) => (v === 1 ? "Yes" : "No") },
   { header: "Receipt", key: "receipt_reference" },
+  { header: "Attachment URL", key: "attachment_url" },
 ];
 
 expenses.get("/export/csv", requirePermission("expenses", "export"), (c) => {
@@ -59,7 +60,14 @@ expenses.get("/export/csv", requirePermission("expenses", "export"), (c) => {
 });
 
 // CSV import (mirror of /products/import)
-const EXPENSE_FIELDS = ["vendor", "category", "description", "expense_date", "amount"] as const;
+const EXPENSE_FIELDS = [
+  "vendor",
+  "category",
+  "description",
+  "expense_date",
+  "amount",
+  "attachment_url",
+] as const;
 type ExpenseField = (typeof EXPENSE_FIELDS)[number];
 
 const expenseImportSchema = z.object({
@@ -97,6 +105,16 @@ expenses.post("/import/preview", requirePermission("expenses", "create"), async 
       else if (norm === "date") suggested[String(i)] = "expense_date";
       else if (norm === "amount" || norm === "cost" || norm === "price")
         suggested[String(i)] = "amount";
+      else if (
+        norm === "attachment_url" ||
+        norm === "link" ||
+        norm === "url" ||
+        norm === "drive" ||
+        norm === "gdrive" ||
+        norm === "receipt_url" ||
+        norm === "invoice_url"
+      )
+        suggested[String(i)] = "attachment_url";
     }
   });
 
@@ -140,6 +158,10 @@ expenses.post("/import", requirePermission("expenses", "create"), async (c) => {
       if (field === "amount") {
         const n = parseFloat(value.replace(/[,]/g, ""));
         if (Number.isFinite(n)) expense[field] = n;
+      } else if (field === "attachment_url") {
+        // Only keep a link that is actually a link; a typo'd cell must not
+        // turn into a broken button in the expenses list.
+        if (/^https?:\/\/.+/i.test(value)) expense[field] = value;
       } else {
         expense[field] = value;
       }
@@ -205,6 +227,7 @@ const expenseSchema = z.object({
   currency: z.string().max(3).optional(),
   exchange_rate: z.number().positive().optional(),
   receipt_reference: z.string().max(500).optional().or(z.literal("")),
+  attachment_url: z.string().max(2000).url().optional().or(z.literal("")).or(z.null()),
   customer_id: z.string().optional().nullable(),
   is_billable: z.number().min(0).max(1).optional(),
   notes: z.string().max(2000).optional().or(z.literal("")),

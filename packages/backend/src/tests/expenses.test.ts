@@ -185,6 +185,82 @@ describe("Expenses", () => {
   });
 });
 
+describe("Expense attachment links", () => {
+  let linkId: string;
+
+  test("stores the download link and keeps it when an edit omits it", async () => {
+    const res = await authed("/api/v1/expenses", {
+      method: "POST",
+      body: JSON.stringify({
+        vendor: "Drive Store",
+        expense_date: "2026-05-04",
+        amount: 50,
+        attachment_url: "https://drive.google.com/file/d/abc123/view",
+      }),
+    });
+    expect(res.status).toBe(201);
+    const data = (await res.json()) as any;
+    linkId = data.data.id;
+    expect(data.data.attachment_url).toBe("https://drive.google.com/file/d/abc123/view");
+
+    const edited = await authed(`/api/v1/expenses/${linkId}`, {
+      method: "PUT",
+      body: JSON.stringify({ vendor: "Drive Store SL", expense_date: "2026-05-04", amount: 55 }),
+    });
+    const editedData = (await edited.json()) as any;
+    expect(editedData.data.attachment_url).toBe("https://drive.google.com/file/d/abc123/view");
+
+    const cleared = await authed(`/api/v1/expenses/${linkId}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        vendor: "Drive Store SL",
+        expense_date: "2026-05-04",
+        amount: 55,
+        attachment_url: "",
+      }),
+    });
+    expect(((await cleared.json()) as any).data.attachment_url).toBeNull();
+  });
+
+  test("rejects a value that is not a URL", async () => {
+    const res = await authed("/api/v1/expenses", {
+      method: "POST",
+      body: JSON.stringify({
+        vendor: "Broken link",
+        expense_date: "2026-05-04",
+        amount: 10,
+        attachment_url: "drive.google.com/not-a-scheme",
+      }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  test("CSV import maps a link column and drops a malformed cell", async () => {
+    const csv = [
+      "vendor,amount,expense_date,link",
+      "One SL,10,2026-05-01,https://drive.google.com/file/d/1/view",
+      "Two SL,20,2026-05-02,not-a-link",
+    ].join("\n");
+    const res = await authed("/api/v1/expenses/import", {
+      method: "POST",
+      body: JSON.stringify({
+        csv,
+        mapping: { "0": "vendor", "1": "amount", "2": "expense_date", "3": "attachment_url" },
+      }),
+    });
+    expect(res.status).toBe(200);
+    const data = (await res.json()) as any;
+    expect(data.data.created).toBe(2);
+    expect(data.data.errors).toEqual([]);
+
+    const list = (await (await authed("/api/v1/expenses?limit=100")).json()) as any;
+    const one = list.data.items.find((e: any) => e.vendor === "One SL");
+    const two = list.data.items.find((e: any) => e.vendor === "Two SL");
+    expect(one.attachment_url).toBe("https://drive.google.com/file/d/1/view");
+    expect(two.attachment_url).toBeNull();
+  });
+});
+
 describe("Expense receipts", () => {
   const PNG = new Uint8Array([
     0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,

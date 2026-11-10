@@ -66,6 +66,7 @@ export default function ExpenseForm({ onSave }: Props) {
     currency: defaultCurrency,
     exchange_rate: 1,
     receipt_reference: "",
+    attachment_url: "",
     customer_id: "",
     is_billable: 0,
     notes: "",
@@ -96,6 +97,7 @@ export default function ExpenseForm({ onSave }: Props) {
           currency: d.currency || defaultCurrency,
           exchange_rate: d.exchange_rate ?? 1,
           receipt_reference: d.receipt_reference || "",
+          attachment_url: d.attachment_url || "",
           customer_id: d.customer_id || "",
           is_billable: d.is_billable ?? 0,
           notes: d.notes || "",
@@ -318,6 +320,19 @@ export default function ExpenseForm({ onSave }: Props) {
                 value={form.receipt_reference}
                 onChange={(e) => setField("receipt_reference", e.target.value)}
                 placeholder={t("expenses.receipt_placeholder")}
+              />
+            </FormField>
+
+            {/* Where the invoice itself can be downloaded from: a shared Drive
+                folder, Dropbox, a client portal. This is the link the accountant
+                opens, so it is validated as a URL. */}
+            <FormField label={t("expenses.attachment_url")}>
+              <Input
+                type="url"
+                value={form.attachment_url}
+                onChange={(e) => setField("attachment_url", e.target.value)}
+                placeholder={t("expenses.attachment_placeholder")}
+                disabled={readOnly}
               />
             </FormField>
           </CardContent>

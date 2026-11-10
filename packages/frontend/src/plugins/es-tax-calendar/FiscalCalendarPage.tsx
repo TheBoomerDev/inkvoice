@@ -28,7 +28,14 @@ import {
 import { useTranslation } from "@/i18n";
 import { formatCurrency } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth.store";
-import { type EsTaxRegime, type EsTaxReport, esTaxApi, type QuarterRow } from "./api";
+import {
+  type EsTaxForm,
+  type EsTaxRegime,
+  type EsTaxReport,
+  esTaxApi,
+  type QuarterRow,
+} from "./api";
+import FiscalYearCalendar from "./FiscalYearCalendar";
 
 const STATE_VARIANT: Record<
   QuarterRow["state"],
@@ -79,6 +86,8 @@ export default function FiscalCalendarPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [savingRegime, setSavingRegime] = useState(false);
+  const [savingForm, setSavingForm] = useState(false);
+  const [view, setView] = useState<"quarters" | "calendar">("quarters");
 
   const years = useMemo(
     () => [thisYear + 1, thisYear, thisYear - 1, thisYear - 2, thisYear - 3],
@@ -117,6 +126,18 @@ export default function FiscalCalendarPage() {
     }
   }
 
+  async function changeFiscalForm(form: EsTaxForm) {
+    setSavingForm(true);
+    try {
+      await esTaxApi.setFiscalForm(form);
+      await load();
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setSavingForm(false);
+    }
+  }
+
   function exportCsv() {
     if (!report) return;
     const rows: (string | number | null)[][] = [
@@ -145,6 +166,23 @@ export default function FiscalCalendarPage() {
         q.purchases_taxable,
         q.input_vat,
         q.result,
+      ]);
+    }
+    rows.push([]);
+    rows.push([
+      t("es_tax.deadline"),
+      t("es_tax.model"),
+      t("es_tax.period"),
+      t("es_tax.result"),
+      t("es_tax.state"),
+    ]);
+    for (const f of report.filings) {
+      rows.push([
+        f.date,
+        f.model,
+        f.period_from && f.period_to ? `${f.period_from} → ${f.period_to}` : "",
+        f.amount ?? "",
+        t(`es_tax.state_${f.state}`),
       ]);
     }
     rows.push([]);
@@ -201,6 +239,19 @@ export default function FiscalCalendarPage() {
               <SelectItem value="foral">{t("es_tax.regime_foral")}</SelectItem>
             </SelectContent>
           </Select>
+          <Select
+            value={report?.fiscal_form ?? "autonomo"}
+            onValueChange={(v) => void changeFiscalForm(v as EsTaxForm)}
+            disabled={!isAdmin || savingForm || loading}
+          >
+            <SelectTrigger className="w-[200px]">
+              <SelectValue>{t(`es_tax.form_${report?.fiscal_form ?? "autonomo"}`)}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="autonomo">{t("es_tax.form_autonomo")}</SelectItem>
+              <SelectItem value="sociedad">{t("es_tax.form_sociedad")}</SelectItem>
+            </SelectContent>
+          </Select>
           <Button variant="outline" size="icon" onClick={() => void load()} disabled={loading}>
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
           </Button>
@@ -209,6 +260,31 @@ export default function FiscalCalendarPage() {
             {t("es_tax.export_csv")}
           </Button>
         </div>
+      </div>
+
+      <div className="inline-flex rounded-md border p-0.5 text-sm">
+        <button
+          type="button"
+          onClick={() => setView("quarters")}
+          className={
+            view === "quarters"
+              ? "rounded-sm bg-primary px-3 py-1.5 text-primary-foreground"
+              : "rounded-sm px-3 py-1.5 text-muted-foreground hover:text-foreground"
+          }
+        >
+          {t("es_tax.view_quarters")}
+        </button>
+        <button
+          type="button"
+          onClick={() => setView("calendar")}
+          className={
+            view === "calendar"
+              ? "rounded-sm bg-primary px-3 py-1.5 text-primary-foreground"
+              : "rounded-sm px-3 py-1.5 text-muted-foreground hover:text-foreground"
+          }
+        >
+          {t("es_tax.view_calendar")}
+        </button>
       </div>
 
       {error ? (
@@ -234,273 +310,305 @@ export default function FiscalCalendarPage() {
             </div>
           ))}
 
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  {t("es_tax.output_vat")}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="text-2xl font-semibold tabular-nums">
-                {money(report.year_totals.output_vat)}
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  {t("es_tax.input_vat")}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="text-2xl font-semibold tabular-nums">
-                {money(report.year_totals.input_vat)}
-              </CardContent>
-            </Card>
-            <Card className="sm:col-span-2">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  {t("es_tax.totals_result")}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="flex items-baseline gap-3">
-                <span className="text-2xl font-semibold tabular-nums">
-                  {money(Math.abs(report.year_totals.result))}
-                </span>
-                <span className="text-sm text-muted-foreground">
-                  {resultLabel(report.year_totals.result)}
-                </span>
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-2">
-            {report.quarters.map((q) => (
-              <Card key={q.quarter}>
-                <CardHeader className="flex flex-row items-start justify-between gap-2 pb-3">
-                  <div>
-                    <CardTitle className="text-base">
-                      {t("es_tax.quarter", { n: q.quarter })}
-                      {q.model ? ` · ${t("es_tax.vat_summary", { model: q.model })}` : ""}
+          {view === "calendar" ? (
+            <FiscalYearCalendar report={report} money={money} />
+          ) : (
+            <>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">
+                      {t("es_tax.output_vat")}
                     </CardTitle>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {formatDate(q.from, language)} — {formatDate(q.to, language)}
-                    </p>
-                  </div>
-                  <Badge variant={STATE_VARIANT[q.state]}>{t(`es_tax.state_${q.state}`)}</Badge>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                    <dt className="text-muted-foreground">{t("es_tax.sales_taxable")}</dt>
-                    <dd className="text-right tabular-nums">{money(q.sales_taxable)}</dd>
-                    <dt className="text-muted-foreground">{t("es_tax.output_vat")}</dt>
-                    <dd className="text-right tabular-nums">{money(q.output_vat)}</dd>
-                    <dt className="text-muted-foreground">{t("es_tax.input_vat")}</dt>
-                    <dd className="text-right tabular-nums">{money(q.input_vat)}</dd>
-                    <dt className="font-medium">{t("es_tax.result")}</dt>
-                    <dd className="text-right font-semibold tabular-nums">
-                      {money(q.result)}{" "}
-                      <span className="text-xs font-normal text-muted-foreground">
-                        {resultLabel(q.result)}
-                      </span>
-                    </dd>
-                  </dl>
+                  </CardHeader>
+                  <CardContent className="text-2xl font-semibold tabular-nums">
+                    {money(report.year_totals.output_vat)}
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">
+                      {t("es_tax.input_vat")}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-2xl font-semibold tabular-nums">
+                    {money(report.year_totals.input_vat)}
+                  </CardContent>
+                </Card>
+                <Card className="sm:col-span-2">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">
+                      {t("es_tax.totals_result")}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="flex items-baseline gap-3">
+                    <span className="text-2xl font-semibold tabular-nums">
+                      {money(Math.abs(report.year_totals.result))}
+                    </span>
+                    <span className="text-sm text-muted-foreground">
+                      {resultLabel(report.year_totals.result)}
+                    </span>
+                  </CardContent>
+                </Card>
+              </div>
 
-                  <div className="flex items-center gap-2 rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
-                    <CalendarClock className="h-3.5 w-3.5 shrink-0" />
-                    {q.state === "no_activity" ? (
-                      <span>{t("es_tax.no_activity")}</span>
-                    ) : q.deadline ? (
-                      <span>
-                        {t("es_tax.deadline")}: {formatDate(q.deadline, language)} ·{" "}
-                        {q.days_left !== null && q.days_left >= 0
-                          ? t("es_tax.days_left", { count: q.days_left })
-                          : t("es_tax.overdue_by", { count: Math.abs(q.days_left ?? 0) })}
-                      </span>
-                    ) : (
-                      <span>{t("es_tax.no_deadline")}</span>
-                    )}
-                  </div>
+              <div className="grid gap-4 lg:grid-cols-2">
+                {report.quarters.map((q) => (
+                  <Card key={q.quarter}>
+                    <CardHeader className="flex flex-row items-start justify-between gap-2 pb-3">
+                      <div>
+                        <CardTitle className="text-base">
+                          {t("es_tax.quarter", { n: q.quarter })}
+                          {q.model ? ` · ${t("es_tax.vat_summary", { model: q.model })}` : ""}
+                        </CardTitle>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {formatDate(q.from, language)} — {formatDate(q.to, language)}
+                        </p>
+                      </div>
+                      <Badge variant={STATE_VARIANT[q.state]}>{t(`es_tax.state_${q.state}`)}</Badge>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                        <dt className="text-muted-foreground">{t("es_tax.sales_taxable")}</dt>
+                        <dd className="text-right tabular-nums">{money(q.sales_taxable)}</dd>
+                        <dt className="text-muted-foreground">{t("es_tax.output_vat")}</dt>
+                        <dd className="text-right tabular-nums">{money(q.output_vat)}</dd>
+                        <dt className="text-muted-foreground">{t("es_tax.input_vat")}</dt>
+                        <dd className="text-right tabular-nums">{money(q.input_vat)}</dd>
+                        <dt className="font-medium">{t("es_tax.result")}</dt>
+                        <dd className="text-right font-semibold tabular-nums">
+                          {money(q.result)}{" "}
+                          <span className="text-xs font-normal text-muted-foreground">
+                            {resultLabel(q.result)}
+                          </span>
+                        </dd>
+                      </dl>
 
-                  {q.draft_invoices > 0 && (
-                    <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs">
-                      {t("es_tax.drafts_warning", { count: q.draft_invoices })}
-                    </p>
-                  )}
+                      <div className="flex items-center gap-2 rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+                        <CalendarClock className="h-3.5 w-3.5 shrink-0" />
+                        {q.state === "no_activity" ? (
+                          <span>{t("es_tax.no_activity")}</span>
+                        ) : q.deadline ? (
+                          <span>
+                            {t("es_tax.deadline")}: {formatDate(q.deadline, language)} ·{" "}
+                            {q.days_left !== null && q.days_left >= 0
+                              ? t("es_tax.days_left", { count: q.days_left })
+                              : t("es_tax.overdue_by", { count: Math.abs(q.days_left ?? 0) })}
+                          </span>
+                        ) : (
+                          <span>{t("es_tax.no_deadline")}</span>
+                        )}
+                      </div>
 
-                  {q.rates.length > 0 && (
-                    <div>
-                      <p className="mb-1 text-xs font-medium text-muted-foreground">
-                        {t("es_tax.rates_title")}
+                      {q.draft_invoices > 0 && (
+                        <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs">
+                          {t("es_tax.drafts_warning", { count: q.draft_invoices })}
+                        </p>
+                      )}
+
+                      {q.rates.length > 0 && (
+                        <div>
+                          <p className="mb-1 text-xs font-medium text-muted-foreground">
+                            {t("es_tax.rates_title")}
+                          </p>
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead className="h-7 py-1 text-xs">
+                                  {t("es_tax.rate")}
+                                </TableHead>
+                                <TableHead className="h-7 py-1 text-right text-xs">
+                                  {t("es_tax.taxable")}
+                                </TableHead>
+                                <TableHead className="h-7 py-1 text-right text-xs">
+                                  {t("es_tax.tax")}
+                                </TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {q.rates.map((r) => (
+                                <TableRow key={r.rate}>
+                                  <TableCell className="py-1 text-xs">{r.rate}%</TableCell>
+                                  <TableCell className="py-1 text-right text-xs tabular-nums">
+                                    {money(r.taxable)}
+                                  </TableCell>
+                                  <TableCell className="py-1 text-right text-xs tabular-nums">
+                                    {money(r.tax)}
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      )}
+
+                      <p className="text-xs text-muted-foreground">
+                        {t("es_tax.invoices", { count: q.invoices })}
+                        {q.credit_notes > 0
+                          ? ` · ${t("es_tax.credit_notes", { count: q.credit_notes })}`
+                          : ""}
+                        {q.expenses > 0 ? ` · ${t("es_tax.expenses", { count: q.expenses })}` : ""}
                       </p>
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="h-7 py-1 text-xs">{t("es_tax.rate")}</TableHead>
-                            <TableHead className="h-7 py-1 text-right text-xs">
-                              {t("es_tax.taxable")}
-                            </TableHead>
-                            <TableHead className="h-7 py-1 text-right text-xs">
-                              {t("es_tax.tax")}
-                            </TableHead>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+
+              <div>
+                <h2 className="mb-3 text-lg font-semibold tracking-tight">
+                  {t("es_tax.annual_title")}
+                </h2>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm">
+                        {report.annual.vat_model
+                          ? t("es_tax.vat_summary", { model: report.annual.vat_model })
+                          : t("es_tax.vat_summary", { model: "—" })}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-1 text-xs text-muted-foreground">
+                      <p>{t("es_tax.vat_summary_desc")}</p>
+                      {report.annual.vat_deadline && (
+                        <p className="font-medium text-foreground">
+                          {t("es_tax.deadline")}: {formatDate(report.annual.vat_deadline, language)}
+                        </p>
+                      )}
+                      <p className="tabular-nums">
+                        {money(report.year_totals.output_vat)} −{" "}
+                        {money(report.year_totals.input_vat)} = {money(report.year_totals.result)}
+                      </p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm">
+                        {report.annual.info_model
+                          ? t("es_tax.info_return", { model: report.annual.info_model })
+                          : t("es_tax.info_return", { model: "—" })}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-1 text-xs text-muted-foreground">
+                      <p>
+                        {t("es_tax.info_return_desc", {
+                          threshold: money(report.annual.info_threshold),
+                        })}
+                      </p>
+                      {report.annual.info_deadline && (
+                        <p className="font-medium text-foreground">
+                          {t("es_tax.deadline")}:{" "}
+                          {formatDate(report.annual.info_deadline, language)}
+                        </p>
+                      )}
+                      <p>
+                        {report.annual.customers_347.filter((c) => c.over_threshold).length} /{" "}
+                        {report.annual.customers_347.length}
+                      </p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm">
+                        {report.annual.intracom_model
+                          ? t("es_tax.intracom", { model: report.annual.intracom_model })
+                          : t("es_tax.intracom", { model: "—" })}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-1 text-xs text-muted-foreground">
+                      <p>{t("es_tax.intracom_desc")}</p>
+                      {report.annual.intracom_deadline && (
+                        <p className="font-medium text-foreground">
+                          {t("es_tax.deadline")}:{" "}
+                          {formatDate(report.annual.intracom_deadline, language)}
+                        </p>
+                      )}
+                    </CardContent>
+                  </Card>
+                  {report.annual.irpf_model && (
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm">
+                          {t("es_tax.irpf", { model: report.annual.irpf_model })}
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-1 text-xs text-muted-foreground">
+                        <p>{t("es_tax.irpf_desc")}</p>
+                        {report.annual.irpf_deadline && (
+                          <p className="font-medium text-foreground">
+                            {t("es_tax.deadline")}:{" "}
+                            {formatDate(report.annual.irpf_deadline, language)}
+                          </p>
+                        )}
+                        <p className="text-sm font-medium text-foreground tabular-nums">
+                          {t("es_tax.irpf_estimate")}: {money(report.annual.irpf_estimate)}
+                        </p>
+                      </CardContent>
+                    </Card>
+                  )}
+                  {report.annual.is_model && (
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm">
+                          {t("es_tax.is_return", { model: report.annual.is_model })}
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-1 text-xs text-muted-foreground">
+                        <p>{t("es_tax.is_return_desc")}</p>
+                        {report.annual.is_deadline && (
+                          <p className="font-medium text-foreground">
+                            {t("es_tax.deadline")}:{" "}
+                            {formatDate(report.annual.is_deadline, language)}
+                          </p>
+                        )}
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
+              </div>
+
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">{t("es_tax.customers_title")}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {report.annual.customers_347.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">{t("es_tax.no_customers")}</p>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>{t("es_tax.customer")}</TableHead>
+                          <TableHead>{t("es_tax.tax_id")}</TableHead>
+                          <TableHead className="text-right">{t("es_tax.total")}</TableHead>
+                          <TableHead className="w-[120px]" />
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {report.annual.customers_347.map((c) => (
+                          <TableRow key={c.customer_id}>
+                            <TableCell className="font-medium">{c.name}</TableCell>
+                            <TableCell className="text-muted-foreground">
+                              {c.tax_id ?? "—"}
+                            </TableCell>
+                            <TableCell className="text-right tabular-nums">
+                              {money(c.total)}
+                            </TableCell>
+                            <TableCell>
+                              {c.over_threshold && (
+                                <Badge variant="secondary">{t("es_tax.over_threshold")}</Badge>
+                              )}
+                            </TableCell>
                           </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {q.rates.map((r) => (
-                            <TableRow key={r.rate}>
-                              <TableCell className="py-1 text-xs">{r.rate}%</TableCell>
-                              <TableCell className="py-1 text-right text-xs tabular-nums">
-                                {money(r.taxable)}
-                              </TableCell>
-                              <TableCell className="py-1 text-right text-xs tabular-nums">
-                                {money(r.tax)}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
+                        ))}
+                      </TableBody>
+                    </Table>
                   )}
+                </CardContent>
+              </Card>
 
-                  <p className="text-xs text-muted-foreground">
-                    {t("es_tax.invoices", { count: q.invoices })}
-                    {q.credit_notes > 0
-                      ? ` · ${t("es_tax.credit_notes", { count: q.credit_notes })}`
-                      : ""}
-                    {q.expenses > 0 ? ` · ${t("es_tax.expenses", { count: q.expenses })}` : ""}
-                  </p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-
-          <div>
-            <h2 className="mb-3 text-lg font-semibold tracking-tight">
-              {t("es_tax.annual_title")}
-            </h2>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">
-                    {report.annual.vat_model
-                      ? t("es_tax.vat_summary", { model: report.annual.vat_model })
-                      : t("es_tax.vat_summary", { model: "—" })}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-1 text-xs text-muted-foreground">
-                  <p>{t("es_tax.vat_summary_desc")}</p>
-                  {report.annual.vat_deadline && (
-                    <p className="font-medium text-foreground">
-                      {t("es_tax.deadline")}: {formatDate(report.annual.vat_deadline, language)}
-                    </p>
-                  )}
-                  <p className="tabular-nums">
-                    {money(report.year_totals.output_vat)} − {money(report.year_totals.input_vat)} ={" "}
-                    {money(report.year_totals.result)}
-                  </p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">
-                    {report.annual.info_model
-                      ? t("es_tax.info_return", { model: report.annual.info_model })
-                      : t("es_tax.info_return", { model: "—" })}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-1 text-xs text-muted-foreground">
-                  <p>
-                    {t("es_tax.info_return_desc", {
-                      threshold: money(report.annual.info_threshold),
-                    })}
-                  </p>
-                  {report.annual.info_deadline && (
-                    <p className="font-medium text-foreground">
-                      {t("es_tax.deadline")}: {formatDate(report.annual.info_deadline, language)}
-                    </p>
-                  )}
-                  <p>
-                    {report.annual.customers_347.filter((c) => c.over_threshold).length} /{" "}
-                    {report.annual.customers_347.length}
-                  </p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">
-                    {report.annual.intracom_model
-                      ? t("es_tax.intracom", { model: report.annual.intracom_model })
-                      : t("es_tax.intracom", { model: "—" })}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-1 text-xs text-muted-foreground">
-                  <p>{t("es_tax.intracom_desc")}</p>
-                  {report.annual.intracom_deadline && (
-                    <p className="font-medium text-foreground">
-                      {t("es_tax.deadline")}:{" "}
-                      {formatDate(report.annual.intracom_deadline, language)}
-                    </p>
-                  )}
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">
-                    {report.annual.irpf_model
-                      ? t("es_tax.irpf", { model: report.annual.irpf_model })
-                      : t("es_tax.irpf", { model: "—" })}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-1 text-xs text-muted-foreground">
-                  <p>{t("es_tax.irpf_desc")}</p>
-                  {report.annual.irpf_deadline && (
-                    <p className="font-medium text-foreground">
-                      {t("es_tax.deadline")}: {formatDate(report.annual.irpf_deadline, language)}
-                    </p>
-                  )}
-                  <p className="text-sm font-medium text-foreground tabular-nums">
-                    {t("es_tax.irpf_estimate")}: {money(report.annual.irpf_estimate)}
-                  </p>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">{t("es_tax.customers_title")}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {report.annual.customers_347.length === 0 ? (
-                <p className="text-sm text-muted-foreground">{t("es_tax.no_customers")}</p>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>{t("es_tax.customer")}</TableHead>
-                      <TableHead>{t("es_tax.tax_id")}</TableHead>
-                      <TableHead className="text-right">{t("es_tax.total")}</TableHead>
-                      <TableHead className="w-[120px]" />
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {report.annual.customers_347.map((c) => (
-                      <TableRow key={c.customer_id}>
-                        <TableCell className="font-medium">{c.name}</TableCell>
-                        <TableCell className="text-muted-foreground">{c.tax_id ?? "—"}</TableCell>
-                        <TableCell className="text-right tabular-nums">{money(c.total)}</TableCell>
-                        <TableCell>
-                          {c.over_threshold && (
-                            <Badge variant="secondary">{t("es_tax.over_threshold")}</Badge>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
-
-          <p className="text-xs text-muted-foreground">{t("es_tax.disclaimer")}</p>
+              <p className="text-xs text-muted-foreground">{t("es_tax.disclaimer")}</p>
+            </>
+          )}
         </>
       )}
     </div>

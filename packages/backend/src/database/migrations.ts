@@ -1175,6 +1175,16 @@ const MIGRATIONS: Migration[] = [
       addColumnIfMissing(db, "invoices", "service_period_end", "TEXT");
     },
   },
+  {
+    version: 36,
+    name: "expense_attachment_url",
+    up: (db) => {
+      // Where the invoice itself can be downloaded from (Google Drive, Dropbox,
+      // a shared folder…). Complements receipt_reference (free text) and the
+      // uploaded receipt file: this is the link the accountant clicks.
+      addColumnIfMissing(db, "expenses", "attachment_url", "TEXT");
+    },
+  },
 ];
 
 export const LATEST_MIGRATION_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

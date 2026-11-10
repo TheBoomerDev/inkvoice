@@ -13,6 +13,8 @@ export interface Expense {
   /** Base-currency units per 1 unit of `currency`, frozen at entry. 1 = same as base. */
   exchange_rate: number;
   receipt_reference: string | null;
+  /** External download link for the invoice (Google Drive, Dropbox…). */
+  attachment_url: string | null;
   customer_id: string | null;
   is_billable: number;
   billed_invoice_id: string | null;

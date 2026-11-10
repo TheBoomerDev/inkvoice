@@ -300,8 +300,29 @@ describe("schema migration runner", () => {
     ).toThrow();
   });
 
-  test("migrations reach version 35", () => {
-    expect(LATEST_MIGRATION_VERSION).toBe(35);
+  test("migrations reach version 36", () => {
+    expect(LATEST_MIGRATION_VERSION).toBe(36);
+  });
+
+  test("version 36 adds attachment_url to an existing expense", () => {
+    runWith(db, () => runMigrations());
+    db.exec("DELETE FROM schema_migrations WHERE version >= 36");
+    db.exec("ALTER TABLE expenses DROP COLUMN attachment_url");
+    expect(
+      db
+        .query(
+          "SELECT COUNT(*) AS cnt FROM pragma_table_info('expenses') WHERE name = 'attachment_url'",
+        )
+        .get(),
+    ).toEqual({ cnt: 0 });
+    runWith(db, () => runMigrations());
+    expect(
+      db
+        .query(
+          "SELECT COUNT(*) AS cnt FROM pragma_table_info('expenses') WHERE name = 'attachment_url'",
+        )
+        .get(),
+    ).toEqual({ cnt: 1 });
   });
 
   test("version 35 adds the service date columns to an existing invoice", () => {
