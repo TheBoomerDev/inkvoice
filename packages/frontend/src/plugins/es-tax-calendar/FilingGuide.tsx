@@ -100,7 +100,7 @@ export default function FilingGuide({
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-h-[85vh] w-[75vw] max-w-[1400px] overflow-y-auto">
+        <DialogContent className="max-h-[85vh] w-[75vw] sm:max-w-[1400px] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="pr-8 text-base">
               {briefing?.title ?? `Modelo ${model}`}
