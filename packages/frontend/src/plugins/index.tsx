@@ -13,6 +13,7 @@ import { PluginsSettingsTab } from "./PluginsSettingsTab";
 
 // Official plugins, each registering its surface on import.
 import "./time-tracker";
+import "./es-tax-calendar";
 
 installPluginNavGate();
 

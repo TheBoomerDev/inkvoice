@@ -3,3 +3,4 @@
 // runPluginMigrations() and route mounting.
 
 import "./time-tracker";
+import "./es-tax-calendar";

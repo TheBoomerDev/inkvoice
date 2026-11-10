@@ -2,7 +2,8 @@
 
 Inkvoice ships optional features as **plugins**: statically compiled-in,
 official modules an admin can enable or disable under **Settings → Plugins**.
-Time Tracking is the first official plugin.
+Time Tracking is the first official plugin. A fork can ship its own: this one
+adds [Spanish Fiscal Calendar](/features/es-tax-calendar).
 
 ## Managing plugins
 

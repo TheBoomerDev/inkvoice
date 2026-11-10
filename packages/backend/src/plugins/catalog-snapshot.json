@@ -19,6 +19,34 @@
       "versions": []
     },
     {
+      "id": "es-tax-calendar",
+      "name": "Spanish Fiscal Calendar",
+      "tagline": "VAT periods, AEAT deadlines and annual returns, computed from your own books.",
+      "description": "A calendar of the four Spanish VAT periods with the figures from your own invoices and\nexpenses, the AEAT filing deadline of each one, the annual VAT summary, the informative\nreturns that depend on the year's operations (347, 349) and an estimate of the IRPF\ninstalment under estimación directa.\n\nSupports the régimen común and the Canary IGIC calendar; foral territories are reported\nas amounts only, since their deadlines follow a different calendar. Nothing is filed\nfrom here: the numbers are bookkeeping you hand to your accountant.\n",
+      "category": "compliance",
+      "status": "available",
+      "availability": "oss",
+      "requires_feature": null,
+      "icon": "CalendarClock",
+      "docs": "https://github.com/TheBoomerDev/inkvoice/blob/main/docs/features/es-tax-calendar.md",
+      "source": "https://github.com/TheBoomerDev/inkvoice/tree/main/packages/backend/src/plugins/es-tax-calendar",
+      "screenshots": [],
+      "latest": {
+        "version": "1.0.0",
+        "min_app": "0.3.7",
+        "released": "2026-11-10",
+        "changelog": "Quarterly VAT periods with AEAT deadlines, annual returns (390/425, 347, 349) and an IRPF 130 estimate."
+      },
+      "versions": [
+        {
+          "version": "1.0.0",
+          "min_app": "0.3.7",
+          "released": "2026-11-10",
+          "changelog": "Quarterly VAT periods with AEAT deadlines, annual returns (390/425, 347, 349) and an IRPF 130 estimate."
+        }
+      ]
+    },
+    {
       "id": "france",
       "name": "France Managed PDP",
       "tagline": "Send French e-invoices through a partner platform, no PDP contract needed.",
